@@ -1,0 +1,9 @@
+# Armies Of Tomorrow builds Zero Hour only, so the graph covers GeneralsMD + Core.
+# The original Generals tree duplicates most ZH symbols and makes queries noisy.
+Generals/
+GeneralsReplays/
+Dependencies/
+resources/
+Benchmarks/
+build*/
+graphify-out/

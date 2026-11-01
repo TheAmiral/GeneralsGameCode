@@ -5,6 +5,8 @@
 !.gitattributes
 !.github
 !.gitmodules
+!.claude
+!.graphifyignore
 
 *.user
 *.ncb
@@ -49,9 +51,9 @@ thumbs.db
 /Dependencies/MaxSDK/maxsdk
 /tmp/
 
-## AI assistant config (user-specific)
-/.claude/
-/CLAUDE.md
+## AI assistant config: Armies Of Tomorrow tracks the shared CLAUDE.md and
+## .claude/settings.json (graphify); personal overrides stay local.
+/.claude/settings.local.json
 
 ## IntelliJ, CLion, etc.
 /.idea
@@ -67,3 +69,5 @@ build.ninja
 ## Python
 __pycache__/
 *.pyc
+# graphify knowledge graph (rebuilt locally by scripts/graphify-setup.sh, ~90 MB)
+graphify-out/
