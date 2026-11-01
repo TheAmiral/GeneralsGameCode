@@ -83,6 +83,7 @@ protected:
 		Vector2	endPointUV[2];			///< uv coordinates at each end point
 		Int		timeAdded;				///< time when edge was created.
 		Real	alpha;					///< current alpha value for rendering
+		Real	terrainAlpha;			///< how strongly the terrain under this edge shows track marks
 	};
 
 	edgeInfo	m_edges[MAX_TRACK_EDGE_COUNT];	///<edges at each segment break

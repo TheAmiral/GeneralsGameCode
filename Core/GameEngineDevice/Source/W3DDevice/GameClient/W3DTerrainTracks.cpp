@@ -59,6 +59,43 @@
 #include "GameLogic/TerrainLogic.h"
 #include "GameLogic/Object.h"
 #include "GameClient/Drawable.h"
+#include "GameClient/TerrainVisual.h"
+#include "Common/TerrainTypes.h"
+
+/** Hard ground takes fainter track marks than soft ground. Presentation only: the result is
+	used for rendering and never reaches game logic. */
+static Real getTerrainTrackAlpha(Real x, Real y)
+{
+	TerrainType *tile = TheTerrainVisual ? TheTerrainVisual->getTerrainTile(x, y) : nullptr;
+	if (tile == nullptr)
+		return 1.0f;
+
+	switch (tile->getClass())
+	{
+		case TERRAIN_ASPHALT:
+		case TERRAIN_CONCRETE:
+		case TERRAIN_URBAN:
+			return 0.3f;
+
+		case TERRAIN_COBBLESTONE_GRASS:
+		case TERRAIN_RESIDENTIAL:
+		case TERRAIN_CHINA:
+		case TERRAIN_ROCK:
+		case TERRAIN_ACCENT_ROCK:
+		case TERRAIN_RUGGED_MOUNTAIN:
+		case TERRAIN_CLIFF:
+			return 0.5f;
+
+		case TERRAIN_GRASS:
+		case TERRAIN_ACCENT_GRASS:
+		case TERRAIN_FIELD:
+		case TERRAIN_BEACH_PARK:
+			return 0.8f;
+
+		default:
+			return 1.0f;
+	}
+}
 
 
 #define BRIDGE_OFFSET_FACTOR	0.25f	//amount to raise tracks above bridges.
@@ -291,6 +328,7 @@ void TerrainTracksRenderObjClass::addCapEdgeToTrack(Real x, Real y)
 
 	topEdge.timeAdded=WW3D::Get_Sync_Time();
 	topEdge.alpha=0.0f;	//fully transparent at cap.
+	topEdge.terrainAlpha=getTerrainTrackAlpha(x,y);
 	m_lastAnchor=vPos;
 	m_activeEdgeCount++;
 	m_totalEdgesAdded++;
@@ -410,6 +448,7 @@ void TerrainTracksRenderObjClass::addEdgeToTrack(Real x, Real y)
 
 	topEdge.timeAdded=WW3D::Get_Sync_Time();
 	topEdge.alpha=1.0f;	//fully opaque at start.
+	topEdge.terrainAlpha=getTerrainTrackAlpha(x,y);
 	if (m_airborne || m_activeEdgeCount <= 1) {
 		topEdge.alpha=0.0f;	//smooth out track restarts by setting transparent
 	}
@@ -865,6 +904,7 @@ Try improving the fit to vertical surfaces like cliffs.
 					}
 
 					distanceFade *= mod->m_edges[index].alpha;	//adjust fade with distance from start of track
+					distanceFade *= mod->m_edges[index].terrainAlpha;	//hard ground shows fainter marks
 
 					verts->x=endPoint->X;
 					verts->y=endPoint->Y;
