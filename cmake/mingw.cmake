@@ -86,12 +86,13 @@ if(MINGW)
     if(IS_MINGW64)
         # AoT @feature 64-bit: link winpthread statically so the exe needs no MinGW DLLs.
         add_link_options(-static)
-
-        # AoT @feature 64-bit: the engine's static libraries reference each other in a
-        # cycle (GameEngine <-> GameEngineDevice). Let the linker rescan them as a group.
-        set(CMAKE_CXX_LINK_EXECUTABLE
-            "<CMAKE_CXX_COMPILER> <FLAGS> <CMAKE_CXX_LINK_FLAGS> <LINK_FLAGS> <OBJECTS> -o <TARGET> -Wl,--out-implib,<TARGET_IMPLIB> -Wl,--start-group <LINK_LIBRARIES> -Wl,--end-group")
     endif()
+
+    # AoT @bugfix: the engine's static libraries reference each other in a cycle
+    # (GameEngine <-> GameEngineDevice), which GNU ld does not resolve in one pass.
+    # Let the linker rescan them as a group. Needed for both i686 and x86_64.
+    set(CMAKE_CXX_LINK_EXECUTABLE
+        "<CMAKE_CXX_COMPILER> <FLAGS> <CMAKE_CXX_LINK_FLAGS> <LINK_FLAGS> <OBJECTS> -o <TARGET> -Wl,--out-implib,<TARGET_IMPLIB> -Wl,--start-group <LINK_LIBRARIES> -Wl,--end-group")
 
     if(IS_MINGW32 AND NOT TARGET d3dx8)
         add_library(d3dx8 INTERFACE IMPORTED GLOBAL)
