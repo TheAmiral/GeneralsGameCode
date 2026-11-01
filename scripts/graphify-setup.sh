@@ -15,6 +15,10 @@ if ! command -v graphify >/dev/null 2>&1; then
     pipx install "graphifyy==${GRAPHIFY_VERSION}" >/dev/null 2>&1
   fi
   export PATH="$HOME/.local/bin:$PATH"
+  # Keep the install dir on PATH for the rest of the session (later hooks and Bash calls).
+  if [ -n "$CLAUDE_ENV_FILE" ] && command -v graphify >/dev/null 2>&1; then
+    echo 'export PATH="$HOME/.local/bin:$PATH"' >>"$CLAUDE_ENV_FILE"
+  fi
 fi
 command -v graphify >/dev/null 2>&1 || { echo "graphify not installed (needs Python 3.10+ and uv or pipx)"; exit 0; }
 
