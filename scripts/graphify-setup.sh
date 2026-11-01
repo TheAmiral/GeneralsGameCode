@@ -18,8 +18,8 @@ if ! command -v graphify >/dev/null 2>&1; then
 fi
 command -v graphify >/dev/null 2>&1 || { echo "graphify not installed (needs Python 3.10+ and uv or pipx)"; exit 0; }
 
-# 2. Build or refresh the graph in the background (about 90 s from scratch on 4 cores,
-#    a few seconds when only a few files changed). Scope is set by .graphifyignore.
+# 2. Build or refresh the graph in the background (about 90 s to build and up to 3 min
+#    to refresh on 4 cores, since update re-clusters). Scope is set by .graphifyignore.
 LOG="graphify-out/setup.log"
 mkdir -p graphify-out
 if [ -f graphify-out/graph.json ]; then
