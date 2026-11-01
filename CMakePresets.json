@@ -191,6 +191,33 @@
             "cacheVariables": {
                 "RTS_BUILD_OPTION_PROFILE": "ON"
             }
+        },
+        {
+            "name": "win64",
+            "inherits": "default",
+            "hidden": false,
+            "displayName": "Windows 64bit Release (experimental, Armies Of Tomorrow)",
+            "architecture": {
+                "value": "x64",
+                "strategy": "external"
+            },
+            "cacheVariables": {
+                "RTS_FLAGS": "/W3",
+                "RTS_BUILD_GENERALS": "OFF"
+            }
+        },
+        {
+            "name": "mingw-w64-x86_64",
+            "displayName": "MinGW-w64 64-bit (x86_64) Release (experimental, Armies Of Tomorrow)",
+            "generator": "Ninja",
+            "hidden": false,
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "toolchainFile": "${sourceDir}/cmake/toolchains/mingw-w64-x86_64.cmake",
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "CMAKE_BUILD_TYPE": "Release",
+                "RTS_BUILD_GENERALS": "OFF"
+            }
         }
     ],
     "buildPresets": [
@@ -290,6 +317,19 @@
             "configurePreset": "mingw-w64-i686-profile",
             "displayName": "Build MinGW-w64 32-bit (i686) Profile",
             "description": "Build MinGW-w64 32-bit (i686) Profile"
+        },
+        {
+            "name": "win64",
+            "configurePreset": "win64",
+            "displayName": "Build Windows 64bit Release (experimental)",
+            "description": "Build Windows 64bit Release (experimental)",
+            "configuration": "Release"
+        },
+        {
+            "name": "mingw-w64-x86_64",
+            "configurePreset": "mingw-w64-x86_64",
+            "displayName": "Build MinGW-w64 64-bit (x86_64) Release (experimental)",
+            "description": "Build MinGW-w64 64-bit (x86_64) Release (experimental)"
         }
     ],
     "testPresets": [
@@ -547,6 +587,32 @@
                 {
                     "type": "build",
                     "name": "mingw-w64-i686-profile"
+                }
+            ]
+        },
+        {
+            "name": "win64",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "win64"
+                },
+                {
+                    "type": "build",
+                    "name": "win64"
+                }
+            ]
+        },
+        {
+            "name": "mingw-w64-x86_64",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "mingw-w64-x86_64"
+                },
+                {
+                    "type": "build",
+                    "name": "mingw-w64-x86_64"
                 }
             ]
         }

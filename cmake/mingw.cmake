@@ -8,7 +8,8 @@ if(MINGW)
         set(IS_MINGW32 TRUE)
         message(STATUS "MinGW-w64 32-bit (i686) detected")
     else()
-        message(FATAL_ERROR "MinGW-w64 64-bit (x86_64) detected, but this project only supports 32-bit builds. Use the i686-w64-mingw32 toolchain.")
+        set(IS_MINGW64 TRUE)
+        message(WARNING "MinGW-w64 64-bit (x86_64) detected. The 64-bit port is experimental (Armies Of Tomorrow).")
     endif()
 
     # Windows subsystem
@@ -55,7 +56,6 @@ if(MINGW)
     # Required Windows libraries for DX8 + COM
     link_libraries(
         comctl32    # Common controls
-        d3d8        # Direct3D 8
         dinput8     # DirectInput 8
         dsound      # DirectSound
         gdi32       # GDI
@@ -78,7 +78,22 @@ if(MINGW)
     # The min-dx8-sdk (dx8.cmake) handles this correctly via d3d8lib interface target,
     # but for compatibility with direct library references in main executables,
     # we create an alias so that linking to d3dx8 automatically uses d3dx8d
-    if(NOT TARGET d3dx8)
+    if(IS_MINGW32)
+        # Direct3D 8 import library only exists for 32-bit. 64-bit loads D3D8.DLL at runtime.
+        link_libraries(d3d8)
+    endif()
+
+    if(IS_MINGW64)
+        # AoT @feature 64-bit: link winpthread statically so the exe needs no MinGW DLLs.
+        add_link_options(-static)
+
+        # AoT @feature 64-bit: the engine's static libraries reference each other in a
+        # cycle (GameEngine <-> GameEngineDevice). Let the linker rescan them as a group.
+        set(CMAKE_CXX_LINK_EXECUTABLE
+            "<CMAKE_CXX_COMPILER> <FLAGS> <CMAKE_CXX_LINK_FLAGS> <LINK_FLAGS> <OBJECTS> -o <TARGET> -Wl,--out-implib,<TARGET_IMPLIB> -Wl,--start-group <LINK_LIBRARIES> -Wl,--end-group")
+    endif()
+
+    if(IS_MINGW32 AND NOT TARGET d3dx8)
         add_library(d3dx8 INTERFACE IMPORTED GLOBAL)
         set_target_properties(d3dx8 PROPERTIES
             INTERFACE_LINK_LIBRARIES "d3dx8d"
