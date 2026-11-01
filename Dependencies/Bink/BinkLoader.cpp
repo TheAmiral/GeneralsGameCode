@@ -36,8 +36,8 @@ namespace
 
 typedef HBINK (__stdcall *BinkOpen_t)(const char *name, unsigned int flags);
 typedef void (__stdcall *BinkSetSoundTrack_t)(unsigned int total_tracks, unsigned int *tracks);
-typedef int (__stdcall *BinkSetSoundSystem_t)(SndOpenCallback open, unsigned long param);
-typedef void *(__stdcall *BinkOpenDirectSound_t)(unsigned long param);
+typedef int (__stdcall *BinkSetSoundSystem_t)(SndOpenCallback open, uintptr_t param);
+typedef void *(__stdcall *BinkOpenDirectSound_t)(uintptr_t param);
 typedef void (__stdcall *BinkClose_t)(HBINK handle);
 typedef int (__stdcall *BinkWait_t)(HBINK handle);
 typedef int (__stdcall *BinkDoFrame_t)(HBINK handle);
@@ -194,12 +194,12 @@ void __stdcall BinkSetSoundTrack(unsigned int total_tracks, unsigned int *tracks
 		BinkSetSoundTrackPtr(total_tracks, tracks);
 }
 
-int __stdcall BinkSetSoundSystem(SndOpenCallback open, unsigned long param)
+int __stdcall BinkSetSoundSystem(SndOpenCallback open, uintptr_t param)
 {
 	return BinkSetSoundSystemPtr != nullptr ? BinkSetSoundSystemPtr(open, param) : 0;
 }
 
-void *__stdcall BinkOpenDirectSound(unsigned long param)
+void *__stdcall BinkOpenDirectSound(uintptr_t param)
 {
 	return BinkOpenDirectSoundPtr != nullptr ? BinkOpenDirectSoundPtr(param) : nullptr;
 }

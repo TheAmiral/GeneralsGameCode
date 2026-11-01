@@ -63,31 +63,31 @@ BOOL WINAPI SymInitialize(
 BOOL WINAPI SymCleanup(
 	HANDLE hProcess);
 
-DWORD WINAPI SymLoadModule(
+DWORD_PTR WINAPI SymLoadModule(
 	HANDLE hProcess,
 	HANDLE hFile,
 	PCSTR ImageName,
 	PCSTR ModuleName,
-	DWORD BaseOfDll,
+	DWORD_PTR BaseOfDll,
 	DWORD SizeOfDll);
 
-DWORD WINAPI SymGetModuleBase(
+DWORD_PTR WINAPI SymGetModuleBase(
 	HANDLE hProcess,
-	DWORD dwAddr);
+	DWORD_PTR dwAddr);
 
 BOOL WINAPI SymUnloadModule(
 	HANDLE hProcess,
-	DWORD BaseOfDll);
+	DWORD_PTR BaseOfDll);
 
 BOOL WINAPI SymGetSymFromAddr(
 	HANDLE hProcess,
-	DWORD dwAddr,
-	PDWORD pdwDisplacement,
+	DWORD_PTR dwAddr,
+	PDWORD_PTR pdwDisplacement,
 	PIMAGEHLP_SYMBOL Symbol);
 
 BOOL WINAPI SymGetLineFromAddr(
 	HANDLE hProcess,
-	DWORD dwAddr,
+	DWORD_PTR dwAddr,
 	PDWORD pdwDisplacement,
 	PIMAGEHLP_LINE Line);
 
@@ -96,7 +96,7 @@ DWORD WINAPI SymSetOptions(
 
 PVOID WINAPI SymFunctionTableAccess(
 	HANDLE hProcess,
-	DWORD AddrBase);
+	DWORD_PTR AddrBase);
 
 BOOL WINAPI StackWalk(
 	DWORD MachineType,

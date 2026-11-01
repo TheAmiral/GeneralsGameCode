@@ -13,6 +13,7 @@ set(UTILITY_SRC
     Utility/hash_map_adapter.h
     Utility/interlocked_adapter.h
     Utility/interlocked_x86asm.inl
+    Utility/cpucontext_compat.h
     Utility/intrin_compat.h
     Utility/iostream_adapter.h
     Utility/lazy_static.h
