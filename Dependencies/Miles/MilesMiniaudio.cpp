@@ -37,6 +37,7 @@
 // pass filtering, speaker type selection, MIDI and DirectSound access.
 
 #include "MilesLoader.h"
+#include "AoTVideoAudio.h"
 #include "mss/mss.h"
 
 #include <stdlib.h>
@@ -158,6 +159,8 @@ std::condition_variable g_eventSignal;
 std::deque<EndEvent> g_events;
 std::thread g_eventThread;
 bool g_eventThreadQuit = false;
+
+void videoCloseLocked(); // video sound track, defined at the end
 
 unsigned g_generationCounter = 0;		// unique per start, across all voices
 
@@ -670,6 +673,7 @@ void __stdcall AIL_shutdown(void)
 	for (Voice *v : voices)
 		deleteVoice(v);
 	g_voices.clear();
+	videoCloseLocked();
 	if (g_engineInit)
 	{
 		ma_engine_uninit(&g_engine);
@@ -1268,3 +1272,127 @@ S32 __stdcall AIL_decompress_ADPCM(const AILSOUNDINFO *info, void **outdata, U32
 }
 
 void __stdcall AIL_mem_free_lock(void *ptr) { free(ptr); }
+
+//-------------------------------------------------------------------------------------------------
+// Video sound track: a push stream that plays silence while it runs dry, so it never ends early.
+namespace
+{
+struct VideoAudio
+{
+	ma_data_source_base base;
+	std::mutex lock;
+	std::deque<float> samples;
+	ma_uint32 channels = 0;
+	ma_uint32 rate = 0;
+	ma_sound sound;
+	bool soundInit = false;
+	bool started = false;
+	float volume = 1.0f;
+};
+VideoAudio g_video;
+
+ma_result videoRead(ma_data_source *, void *out, ma_uint64 frameCount, ma_uint64 *framesRead)
+{
+	float *dst = (float *)out;
+	const ma_uint64 wanted = frameCount * g_video.channels;
+	ma_uint64 copied = 0;
+	{
+		std::lock_guard<std::mutex> lock(g_video.lock);
+		const ma_uint64 have = g_video.samples.size();
+		copied = have < wanted ? have : wanted;
+		std::copy(g_video.samples.begin(), g_video.samples.begin() + (size_t)copied, dst);
+		g_video.samples.erase(g_video.samples.begin(), g_video.samples.begin() + (size_t)copied);
+	}
+	for (ma_uint64 i = copied; i < wanted; ++i)
+		dst[i] = 0.0f;
+	if (framesRead) *framesRead = frameCount;
+	return MA_SUCCESS;
+}
+ma_result videoSeek(ma_data_source *, ma_uint64) { return MA_NOT_IMPLEMENTED; }
+ma_result videoFormat(ma_data_source *, ma_format *format, ma_uint32 *channels, ma_uint32 *rate, ma_channel *map, size_t mapCap)
+{
+	if (format) *format = ma_format_f32;
+	if (channels) *channels = g_video.channels;
+	if (rate) *rate = g_video.rate;
+	if (map) ma_channel_map_init_standard(ma_standard_channel_map_default, map, mapCap, g_video.channels);
+	return MA_SUCCESS;
+}
+ma_data_source_vtable g_videoVtable = { videoRead, videoSeek, videoFormat, nullptr, nullptr, nullptr, 0 };
+
+// Caller holds g_lock.
+void videoCloseLocked()
+{
+	if (g_video.soundInit)
+	{
+		ma_sound_uninit(&g_video.sound); // waits for the audio thread
+		ma_data_source_uninit(&g_video.base);
+		g_video.soundInit = false;
+	}
+	g_video.started = false;
+	std::lock_guard<std::mutex> lock(g_video.lock);
+	g_video.samples.clear();
+	g_video.channels = 0;
+	g_video.rate = 0;
+}
+}
+
+void AoT_VideoAudio_Reset()
+{
+	std::lock_guard<std::recursive_mutex> lock(g_lock);
+	videoCloseLocked();
+}
+
+void AoT_VideoAudio_Close()
+{
+	AoT_VideoAudio_Reset();
+}
+
+void AoT_VideoAudio_Push(const float *interleaved, unsigned frames, unsigned channels, unsigned sampleRate)
+{
+	if (!interleaved || frames == 0 || channels == 0 || sampleRate == 0)
+		return;
+	std::lock_guard<std::recursive_mutex> lock(g_lock);
+	if (!g_engineInit)
+		return;
+	if (g_video.soundInit && (g_video.channels != channels || g_video.rate != sampleRate))
+		videoCloseLocked();
+	if (!g_video.soundInit)
+	{
+		{
+			std::lock_guard<std::mutex> vlock(g_video.lock);
+			g_video.channels = channels;
+			g_video.rate = sampleRate;
+		}
+		ma_data_source_config config = ma_data_source_config_init();
+		config.vtable = &g_videoVtable;
+		if (ma_data_source_init(&config, &g_video.base) != MA_SUCCESS)
+			return;
+		if (ma_sound_init_from_data_source(&g_engine, &g_video.base, MA_SOUND_FLAG_NO_SPATIALIZATION, nullptr, &g_video.sound) != MA_SUCCESS)
+		{
+			ma_data_source_uninit(&g_video.base);
+			return;
+		}
+		ma_sound_set_volume(&g_video.sound, g_video.volume);
+		g_video.soundInit = true;
+	}
+	std::lock_guard<std::mutex> vlock(g_video.lock);
+	g_video.samples.insert(g_video.samples.end(), interleaved, interleaved + (size_t)frames * channels);
+}
+
+void AoT_VideoAudio_Play()
+{
+	std::lock_guard<std::recursive_mutex> lock(g_lock);
+	if (g_video.soundInit && !g_video.started)
+	{
+		ma_sound_start(&g_video.sound);
+		g_video.started = true;
+	}
+}
+
+void AoT_VideoAudio_SetVolume(float volume)
+{
+	std::lock_guard<std::recursive_mutex> lock(g_lock);
+	g_video.volume = volume < 0.0f ? 0.0f : (volume > 1.0f ? 1.0f : volume);
+	if (g_video.soundInit)
+		ma_sound_set_volume(&g_video.sound, g_video.volume);
+}

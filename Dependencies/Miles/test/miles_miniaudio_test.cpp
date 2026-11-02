@@ -5,6 +5,7 @@
 
 #include "mss/mss.h"
 #include "MilesLoader.h"
+#include "AoTVideoAudio.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -209,6 +210,28 @@ int main(int argc, char **argv)
 		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 		AIL_release_3D_sample_handle(s3);
 		AIL_close_3D_listener(listener);
+
+		// Video sound track push stream: 0.3 s stereo 48 kHz, then a format change, then close
+		{
+			std::vector<float> tone(48000 * 3 / 10 * 2);
+			for (size_t i = 0; i < tone.size() / 2; ++i)
+				tone[i * 2] = tone[i * 2 + 1] = 0.3f * (float)sin(i * 2 * 3.14159265 * 440 / 48000);
+			AoT_VideoAudio_Reset();
+			AoT_VideoAudio_SetVolume(0.5f);
+			AoT_VideoAudio_Push(tone.data(), (unsigned)(tone.size() / 2), 2, 48000);
+			AoT_VideoAudio_Play();
+			AoT_VideoAudio_Play();
+			std::this_thread::sleep_for(std::chrono::milliseconds(150));
+			AoT_VideoAudio_Push(tone.data(), (unsigned)(tone.size() / 2), 1, 22050);
+			AoT_VideoAudio_Play();
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			AoT_VideoAudio_Close();
+			AoT_VideoAudio_Push(nullptr, 0, 2, 48000);
+			printf("ok   video push stream ran\n");
+			// Left open on purpose: AIL_shutdown must close it before the engine goes.
+			AoT_VideoAudio_Push(tone.data(), 100, 2, 48000);
+			AoT_VideoAudio_Play();
+		}
 	}
 
 	AIL_shutdown();

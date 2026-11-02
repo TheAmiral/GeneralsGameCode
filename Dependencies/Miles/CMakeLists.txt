@@ -10,6 +10,7 @@ option(AOT_MILES_MINIAUDIO "Implement the Miles API on miniaudio instead of load
 set(MILES_SRC
     mss/mss.h
     MilesLoader.h
+    AoTVideoAudio.h
 )
 if(AOT_MILES_MINIAUDIO)
     list(APPEND MILES_SRC MilesMiniaudio.cpp)

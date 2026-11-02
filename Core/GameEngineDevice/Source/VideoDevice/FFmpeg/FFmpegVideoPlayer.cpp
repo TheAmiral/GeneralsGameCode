@@ -53,6 +53,39 @@ extern "C" {
 
 #include <chrono>
 
+// Armies Of Tomorrow: without OpenAL, the 64-bit build plays the video sound track through the
+// miniaudio Miles implementation.
+#if !defined(RTS_USE_OPENAL) && defined(AOT_MILES_MINIAUDIO)
+#define AOT_VIDEO_AUDIO 1
+#include "AoTVideoAudio.h"
+
+// Same curve as BinkVideoPlayer::calculateMovieAudioVolume, as a 0..1 gain.
+static float aotMovieGain( Real speechVolume )
+{
+	const int mod = (int)((speechVolume * 0.8f) * 100) + 1;
+	return mod / 100.0f;
+}
+
+// Reads one sample of any common FFmpeg format as float.
+static bool aotSampleToFloat( const AVFrame *frame, int channel, int index, float *out )
+{
+	const AVSampleFormat fmt = static_cast<AVSampleFormat>(frame->format);
+	const int channels = frame->ch_layout.nb_channels;
+	const bool planar = av_sample_fmt_is_planar(fmt) != 0;
+	const uint8_t *plane = frame->extended_data[planar ? channel : 0];
+	const int at = planar ? index : index * channels + channel;
+	switch (av_get_packed_sample_fmt(fmt))
+	{
+	case AV_SAMPLE_FMT_FLT: *out = reinterpret_cast<const float *>(plane)[at]; return true;
+	case AV_SAMPLE_FMT_DBL: *out = (float)reinterpret_cast<const double *>(plane)[at]; return true;
+	case AV_SAMPLE_FMT_S16: *out = reinterpret_cast<const int16_t *>(plane)[at] / 32768.0f; return true;
+	case AV_SAMPLE_FMT_S32: *out = (float)(reinterpret_cast<const int32_t *>(plane)[at] / 2147483648.0); return true;
+	case AV_SAMPLE_FMT_U8: *out = (plane[at] - 128) / 128.0f; return true;
+	default: return false;
+	}
+}
+#endif
+
 //----------------------------------------------------------------------------
 //         Externals
 //----------------------------------------------------------------------------
@@ -285,6 +318,19 @@ void FFmpegVideoPlayer::notifyVideoPlayerOfNewProvider( Bool nowHasValid )
 }
 
 //============================================================================
+// FFmpegVideoPlayer::setVolume
+//============================================================================
+
+void FFmpegVideoPlayer::setVolume( Real volume )
+{
+#ifdef AOT_VIDEO_AUDIO
+	AoT_VideoAudio_SetVolume( aotMovieGain( volume ) );
+#else
+	(void)volume;
+#endif
+}
+
+//============================================================================
 //============================================================================
 void FFmpegVideoPlayer::initializeBinkWithMiles()
 {
@@ -315,6 +361,9 @@ FFmpegVideoStream::FFmpegVideoStream(FFmpegFile* file)
 	// Release the audio handle if it's already in use
 	OpenALAudioStream* audioStream = (OpenALAudioStream*)TheAudio->getHandleForBink();
 	audioStream->reset();
+#elif defined(AOT_VIDEO_AUDIO)
+	AoT_VideoAudio_Reset();
+	AoT_VideoAudio_SetVolume( aotMovieGain( TheAudio->getVolume(AudioAffect_Speech) ) );
 #endif
 
 	// Decode until we have our first video frame
@@ -324,6 +373,8 @@ FFmpegVideoStream::FFmpegVideoStream(FFmpegFile* file)
  #ifdef RTS_USE_OPENAL
 	// Start audio playback
 	audioStream->play();
+#elif defined(AOT_VIDEO_AUDIO)
+	AoT_VideoAudio_Play();
 #endif
 
 	m_startTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
@@ -335,6 +386,9 @@ FFmpegVideoStream::FFmpegVideoStream(FFmpegFile* file)
 
 FFmpegVideoStream::~FFmpegVideoStream()
 {
+#ifdef AOT_VIDEO_AUDIO
+	AoT_VideoAudio_Close();
+#endif
 	av_freep(&m_audioBuffer);
 	av_frame_free(&m_frame);
 	sws_freeContext(m_swsContext);
@@ -384,6 +438,29 @@ void FFmpegVideoStream::onFrame(AVFrame *frame, int stream_idx, int stream_type,
 		ALenum format = OpenALAudioManager::getALFormat(frame->ch_layout.nb_channels, bytesPerSample * 8);
 		audioStream->bufferData(frameData, frameSize, format, frame->sample_rate);
 	}
+#elif defined(AOT_VIDEO_AUDIO)
+	else if (stream_type == AVMEDIA_TYPE_AUDIO) {
+		const int channels = frame->ch_layout.nb_channels;
+		if (channels <= 0 || frame->nb_samples <= 0)
+			return;
+		const size_t bytes = sizeof(float) * (size_t)channels * frame->nb_samples;
+		uint8_t *buffer = static_cast<uint8_t*>(av_realloc(videoStream->m_audioBuffer, bytes));
+		if (buffer == nullptr)
+		{
+			DEBUG_LOG(("Failed to allocate audio buffer"));
+			return;
+		}
+		videoStream->m_audioBuffer = buffer;
+		float *dst = reinterpret_cast<float *>(buffer);
+		for (int i = 0; i < frame->nb_samples; ++i)
+			for (int c = 0; c < channels; ++c)
+				if (!aotSampleToFloat(frame, c, i, &dst[i * channels + c]))
+				{
+					DEBUG_LOG(("Unsupported video audio sample format %d", frame->format));
+					return;
+				}
+		AoT_VideoAudio_Push(dst, (unsigned)frame->nb_samples, (unsigned)channels, (unsigned)frame->sample_rate);
+	}
 #endif
 }
 
@@ -398,6 +475,8 @@ void FFmpegVideoStream::update()
 	// Start audio playback
 	OpenALAudioStream* audioStream = (OpenALAudioStream*)TheAudio->getHandleForBink();
 	audioStream->play();
+#elif defined(AOT_VIDEO_AUDIO)
+	AoT_VideoAudio_Play();
 #endif
 	//BinkWait( m_handle );
 }
