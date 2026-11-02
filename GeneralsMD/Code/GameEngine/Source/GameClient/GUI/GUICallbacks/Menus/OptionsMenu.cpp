@@ -1017,6 +1017,14 @@ void OptionsMenuInit( WindowLayout *layout, void *userData )
 	comboBoxResolution     = TheWindowManager->winGetWindowFromId( nullptr, comboBoxResolutionID );
 	comboBoxDisplayModeID  = TheNameKeyGenerator->nameToKey( "OptionsMenu.wnd:ComboBoxDisplayMode" );
 	comboBoxDisplayMode    = TheWindowManager->winGetWindowFromId( nullptr, comboBoxDisplayModeID );
+	{
+		// Armies Of Tomorrow: the label has no entry in the retail string table, so the WND loader
+		// shows MISSING. Set its text here.
+		GameWindow *displayModeLabel = TheWindowManager->winGetWindowFromId( nullptr,
+			TheNameKeyGenerator->nameToKey( "OptionsMenu.wnd:DisplayModeLabel" ) );
+		if (displayModeLabel)
+			GadgetStaticTextSetText( displayModeLabel, TheGameText->fetchOrSubstitute( "GUI:AoTDisplayModeLabel", L"Window" ) );
+	}
 	comboBoxDetailID			 = TheNameKeyGenerator->nameToKey( "OptionsMenu.wnd:ComboBoxDetail" );
 	comboBoxDetail		   = TheWindowManager->winGetWindowFromId( nullptr, comboBoxDetailID );
 
