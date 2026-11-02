@@ -358,7 +358,13 @@ void DX8Wrapper::Shutdown()
 	}
 
 	if (D3D8Lib) {
+#ifndef _WIN64
 		FreeLibrary(D3D8Lib);
+#endif
+		// Armies Of Tomorrow: 64-bit keeps D3D8.DLL loaded. Some subsystems shut down after the
+		// display and still hold textures (W3DParticleSystemManager). Their Release() would call
+		// into the unloaded DXVK d3d8/d3d9 and crash on exit. D3D objects are reference counted,
+		// so a late Release() is fine while the DLL stays loaded. The OS frees it at exit.
 		D3D8Lib = nullptr;
 	}
 
