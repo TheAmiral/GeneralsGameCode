@@ -1308,7 +1308,7 @@ void OptionsMenuInit( WindowLayout *layout, void *userData )
 		GadgetComboBoxReset(comboBoxDisplayMode);
 		GadgetComboBoxAddEntry(comboBoxDisplayMode, TheGameText->fetchOrSubstitute("GUI:AoTDisplayModeFullscreen", L"Full Screen"), color);
 		GadgetComboBoxAddEntry(comboBoxDisplayMode, TheGameText->fetchOrSubstitute("GUI:AoTDisplayModeWindowed", L"Windowed"), color);
-		GadgetComboBoxAddEntry(comboBoxDisplayMode, TheGameText->fetchOrSubstitute("GUI:AoTDisplayModeBorderless", L"Borderless Window"), color);
+		GadgetComboBoxAddEntry(comboBoxDisplayMode, TheGameText->fetchOrSubstitute("GUI:AoTDisplayModeBorderless", L"Borderless"), color);
 		static_assert(OptionPreferences::DisplayMode_Count == 3, "Wrong combo box count");
 
 		Int modePos = OptionPreferences::DisplayMode_Fullscreen;
