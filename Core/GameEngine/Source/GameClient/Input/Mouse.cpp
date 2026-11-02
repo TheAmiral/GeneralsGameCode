@@ -1074,7 +1074,8 @@ Bool Mouse::canCapture() const
 	DEBUG_ASSERTCRASH(TheDisplay != nullptr, ("The Display is null"));
 	const Bool inInteractiveGame = TheGameLogic && TheGameLogic->isInInteractiveGame();
 
-	if (TheDisplay->getWindowed())
+	// Armies Of Tomorrow: a borderless window captures the cursor like full screen.
+	if (TheDisplay->getWindowed() && !TheDisplay->getBorderless())
 	{
 		if (inInteractiveGame)
 		{

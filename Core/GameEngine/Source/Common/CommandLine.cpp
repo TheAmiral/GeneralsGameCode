@@ -118,6 +118,8 @@ Int parseNoLogOrCrash(char *args[], int)
 Int parseWin(char *args[], int)
 {
 	TheWritableGlobalData->m_windowed = true;
+	TheWritableGlobalData->m_borderless = false;
+	TheWritableGlobalData->m_displayModeFromCommandLine = true;
 
 	return 1;
 }
@@ -377,6 +379,20 @@ Int parseNoAudio(char *args[], int)
 Int parseNoWin(char *args[], int)
 {
 	TheWritableGlobalData->m_windowed = false;
+	TheWritableGlobalData->m_borderless = false;
+	TheWritableGlobalData->m_displayModeFromCommandLine = true;
+
+	return 1;
+}
+
+//=============================================================================
+// Armies Of Tomorrow: borderless window that covers the whole monitor.
+//=============================================================================
+Int parseBorderless(char *args[], int)
+{
+	TheWritableGlobalData->m_windowed = true;
+	TheWritableGlobalData->m_borderless = true;
+	TheWritableGlobalData->m_displayModeFromCommandLine = true;
 
 	return 1;
 }
@@ -1165,6 +1181,7 @@ static CommandLineParam paramsForStartup[] =
 {
 	{ "-win", parseWin },
 	{ "-fullscreen", parseNoWin },
+	{ "-borderless", parseBorderless },
 
 	// TheSuperHackers @feature helmutbuhler 11/04/2025
 	// This runs the game without a window, graphics, input and audio. You can combine this with -replay

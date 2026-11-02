@@ -56,6 +56,19 @@ public:
 		AntiAliasingMode_Count
 	};
 
+	// Armies Of Tomorrow: window mode, stored as "DisplayMode" in Options.ini.
+	enum DisplayMode CPP_11(: Int)
+	{
+		DisplayMode_Fullscreen = 0,	///< exclusive full screen (retail behaviour)
+		DisplayMode_Windowed,				///< window with a title bar
+		DisplayMode_Borderless,			///< window without a frame that covers the monitor
+		DisplayMode_Count
+	};
+
+	static const char *getDisplayModeName(DisplayMode mode);
+	DisplayMode getDisplayMode() const;
+	void setDisplayMode(DisplayMode mode);
+
 	Bool loadFromIniFile();
 
 	WW3D::MultiSampleModeEnum getAntiAliasing() const;

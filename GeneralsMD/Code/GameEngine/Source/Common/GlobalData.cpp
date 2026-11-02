@@ -638,6 +638,8 @@ GlobalData::GlobalData()
 	m_chipSetType = 0;
 	m_headless = FALSE;
 	m_windowed = 0;
+	m_borderless = FALSE;
+	m_displayModeFromCommandLine = FALSE;
 	m_xResolution = DEFAULT_DISPLAY_WIDTH;
 	m_yResolution = DEFAULT_DISPLAY_HEIGHT;
 	m_maxShellScreens = 0;
@@ -1250,6 +1252,15 @@ void GlobalData::parseGameDataDefinition( INI* ini )
 
 	TheWritableGlobalData->m_xResolution = xres;
 	TheWritableGlobalData->m_yResolution = yres;
+
+	// Armies Of Tomorrow: window mode from Options.ini, unless the command line chose one.
+	// Without a DisplayMode entry the INI value of Windowed stays as it is.
+	if (!TheGlobalData->m_displayModeFromCommandLine && optionPref.find("DisplayMode") != optionPref.end())
+	{
+		const OptionPreferences::DisplayMode mode = optionPref.getDisplayMode();
+		TheWritableGlobalData->m_windowed = (mode != OptionPreferences::DisplayMode_Fullscreen);
+		TheWritableGlobalData->m_borderless = (mode == OptionPreferences::DisplayMode_Borderless);
+	}
 }
 
 void GlobalData::parseCustomDefinition()

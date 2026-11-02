@@ -93,6 +93,7 @@ static void drawFramerateBar();
 #include "WW3D2/part_emt.h"
 #include "WW3D2/part_ldr.h"
 #include "WW3D2/dx8caps.h"
+#include "WW3D2/dx8wrapper.h"
 #include "WW3D2/ww3dformat.h"
 #include "WW3D2/agg_def.h"
 #include "WW3D2/render2dsentence.h"
@@ -389,6 +390,7 @@ W3DDisplay::W3DDisplay()
 	Int i;
 
 	m_initialized = false;
+	m_activeBorderless = FALSE;
 	m_assetManager = nullptr;
 	m_3DScene = nullptr;
 	m_2DScene = nullptr;
@@ -567,6 +569,30 @@ void W3DDisplay::setGamma(Real gamma, Real bright, Real contrast, Bool calibrate
 	Renderer::Set_Gamma(gamma,bright,contrast,calibrate, false);
 }
 
+// Armies Of Tomorrow: borderless window mode. The next setDisplayMode() applies the window style.
+//=============================================================================
+void W3DDisplay::setBorderless( Bool borderless )
+{
+	Display::setBorderless( borderless );
+	DX8Wrapper::Set_Borderless( borderless != FALSE );
+}
+
+// Armies Of Tomorrow: size of the monitor the game window is on.
+//=============================================================================
+void W3DDisplay::getMonitorResolution( Int *xres, Int *yres )
+{
+	extern HWND ApplicationHWnd;
+	MONITORINFO mi = { sizeof(MONITORINFO) };
+	if (ApplicationHWnd && GetMonitorInfo(MonitorFromWindow(ApplicationHWnd, MONITOR_DEFAULTTOPRIMARY), &mi))
+	{
+		*xres = mi.rcMonitor.right - mi.rcMonitor.left;
+		*yres = mi.rcMonitor.bottom - mi.rcMonitor.top;
+		return;
+	}
+	*xres = GetSystemMetrics(SM_CXSCREEN);
+	*yres = GetSystemMetrics(SM_CYSCREEN);
+}
+
 /** Set resolution of display */
 //=============================================================================
 Bool W3DDisplay::setDisplayMode( UnsignedInt xres, UnsignedInt yres, UnsignedInt bitdepth, Bool windowed )
@@ -575,11 +601,14 @@ Bool W3DDisplay::setDisplayMode( UnsignedInt xres, UnsignedInt yres, UnsignedInt
 	const UnsignedInt oldHeight = getHeight();
 	const UnsignedInt oldBitDepth = getBitDepth();
 	const Bool oldWindowed = getWindowed();
+	const Bool oldBorderless = m_activeBorderless;
 
 	if (WW3D_ERROR_OK == WW3D::Set_Device_Resolution(xres,yres,bitdepth,windowed,true))
 	{
 		Render2DClass::Set_Screen_Resolution(RectClass(0, 0, xres, yres));
 		Display::setDisplayMode(xres, yres, bitdepth, windowed);
+		setWindowed(windowed); // Armies Of Tomorrow: keep the flag in step, the mode can now change at runtime
+		m_activeBorderless = getBorderless();
 
 		// TheSuperHackers @tweak Font point sizes are scaled from the resolution, so every glyph
 		// cached for the old resolution is now dead weight. Discard the current glyphs and start
@@ -590,9 +619,11 @@ Bool W3DDisplay::setDisplayMode( UnsignedInt xres, UnsignedInt yres, UnsignedInt
 	}
 
 	//set back to the original mode.
+	setBorderless(oldBorderless);
 	WW3D::Set_Device_Resolution(oldWidth, oldHeight, oldBitDepth, oldWindowed, true);
 	Render2DClass::Set_Screen_Resolution(RectClass(0, 0, oldWidth, oldHeight));
 	Display::setDisplayMode(oldWidth, oldHeight, oldBitDepth, oldWindowed);
+	setWindowed(oldWindowed);
 	return FALSE;	//did not change to a new mode.
 }
 
@@ -850,6 +881,9 @@ void W3DDisplay::init()
 		WW3D::Set_Screen_UV_Bias( TRUE );  ///< this makes text look good :)
 
 		setWindowed( TheGlobalData->m_windowed );
+		// Armies Of Tomorrow: borderless is a windowed mode without a frame.
+		setBorderless( TheGlobalData->m_windowed && TheGlobalData->m_borderless );
+		m_activeBorderless = getBorderless();
 
 		// create a 2D renderer helper
 		m_2DRender = NEW Render2DClass;
@@ -864,6 +898,14 @@ void W3DDisplay::init()
 			case 0:
 			{
 				// set our default width and height and bit depth
+				if (getBorderless())
+				{
+					// Armies Of Tomorrow: a borderless window renders at the monitor resolution.
+					Int xres, yres;
+					getMonitorResolution(&xres, &yres);
+					TheWritableGlobalData->m_xResolution = xres;
+					TheWritableGlobalData->m_yResolution = yres;
+				}
 				setWidth( TheGlobalData->m_xResolution );
 				setHeight( TheGlobalData->m_yResolution );
 				setBitDepth( DEFAULT_DISPLAY_BIT_DEPTH );

@@ -703,6 +703,9 @@ void DeclineResolution()
 	//Revert back to old resolution and reset all necessary
 	//parts of the shell
 
+	// Armies Of Tomorrow: the window mode is reverted too.
+	const Bool newBorderless = TheDisplay->getBorderless();
+	TheDisplay->setBorderless(oldDispSettings.borderless);
 	if (TheDisplay->setDisplayMode(oldDispSettings.xRes, oldDispSettings.yRes,
 										oldDispSettings.bitDepth, oldDispSettings.windowed))
 	{
@@ -711,6 +714,8 @@ void DeclineResolution()
 
 		TheWritableGlobalData->m_xResolution = newDispSettings.xRes;
 		TheWritableGlobalData->m_yResolution = newDispSettings.yRes;
+		TheWritableGlobalData->m_windowed = newDispSettings.windowed;
+		TheWritableGlobalData->m_borderless = newDispSettings.borderless;
 
 		TheHeaderTemplateManager->onResolutionChanged();
 		TheMouse->onResolutionChanged();
@@ -720,11 +725,20 @@ void DeclineResolution()
 
 		OptionPreferences optionPref;
 		optionPref["Resolution"] = prefString;
+		if (optionPref.find("DisplayMode") != optionPref.end())
+		{
+			optionPref.setDisplayMode(!newDispSettings.windowed ? OptionPreferences::DisplayMode_Fullscreen
+				: (newDispSettings.borderless ? OptionPreferences::DisplayMode_Borderless : OptionPreferences::DisplayMode_Windowed));
+		}
 		optionPref.write();
 
 		TheShell->recreateWindowLayouts();
 
 		TheInGameUI->recreateControlBar();
+	}
+	else
+	{
+		TheDisplay->setBorderless(newBorderless);
 	}
 }
 

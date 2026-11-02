@@ -318,6 +318,12 @@ public:
 
 	static void Set_Gamma(float gamma,float bright,float contrast,bool calibrate=true,bool uselimit=true);
 
+	// Armies Of Tomorrow: borderless window mode. The device stays windowed; the window loses its
+	// frame and covers the monitor. Calling this also lets the wrapper manage the window style when
+	// the windowed state changes, which the game needs and tools with child windows do not.
+	static void Set_Borderless(bool borderless) { IsBorderless = borderless; ManageWindowStyle = true; }
+	static bool Is_Borderless() { return IsBorderless; }
+
 	// Set_ and Get_Transform() functions take the matrix in Westwood convention format.
 
 	static void Set_Projection_Transform_With_Z_Bias(const Matrix4x4& matrix,float znear, float zfar);	// pointer to 16 matrices
@@ -606,6 +612,7 @@ protected:
 	static bool Registry_Load_Render_Device( const char * sub_key, char *device, int device_len, int &width, int &height, int &depth, int &windowed, int &texture_depth);
 	static bool Is_Windowed() { return IsWindowed; }
 
+
 	static void	Set_Texture_Bitdepth(int depth)	{ WWASSERT(depth==16 || depth==32); TextureBitDepth = depth; }
 	static int	Get_Texture_Bitdepth()			{ return TextureBitDepth; }
 
@@ -620,6 +627,7 @@ protected:
 	** Internal functions
 	*/
 	static void Resize_And_Position_Window();
+	static bool Apply_Windowed_State(bool windowed);
 	static bool Find_Color_And_Z_Mode(int resx,int resy,int bitdepth,D3DFORMAT * set_colorbuffer,D3DFORMAT * set_backbuffer, D3DFORMAT * set_zmode);
 	static bool Find_Color_Mode(D3DFORMAT colorbuffer, int resx, int resy, UINT *mode);
 	static bool Find_Z_Mode(D3DFORMAT colorbuffer,D3DFORMAT backbuffer, D3DFORMAT *zmode);
@@ -649,6 +657,8 @@ protected:
 	static int								BitDepth;
 	static int								TextureBitDepth;
 	static bool								IsWindowed;
+	static bool								IsBorderless;
+	static bool								ManageWindowStyle;
 	static D3DFORMAT					DisplayFormat;
 	static D3DMULTISAMPLE_TYPE	MultiSampleAntiAliasing;
 

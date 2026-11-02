@@ -124,6 +124,9 @@ public:
 	Bool m_headless;
 
 	Bool m_windowed;
+	// Armies Of Tomorrow: borderless window mode (m_windowed is TRUE too, the window has no frame and covers the monitor)
+	Bool m_borderless;
+	Bool m_displayModeFromCommandLine; ///< TRUE when -win, -fullscreen or -borderless was given, so Options.ini does not override it
 	Int m_xResolution;
 	Int m_yResolution;
 	Int m_maxShellScreens;  ///< this many shells layouts can be loaded at once
