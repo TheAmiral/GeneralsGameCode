@@ -745,6 +745,39 @@ Real OptionPreferences::getGammaValue()
 	return gamma;
 }
 
+const char *OptionPreferences::getDisplayModeName(DisplayMode mode)
+{
+	switch (mode)
+	{
+	case DisplayMode_Windowed: return "Windowed";
+	case DisplayMode_Borderless: return "Borderless";
+	default: return "Fullscreen";
+	}
+}
+
+OptionPreferences::DisplayMode OptionPreferences::getDisplayMode() const
+{
+	OptionPreferences::const_iterator it = find("DisplayMode");
+	if (it == end())
+		return DisplayMode_Fullscreen;
+
+	for (Int i = 0; i < DisplayMode_Count; ++i)
+	{
+		if (stricmp(it->second.str(), getDisplayModeName((DisplayMode)i)) == 0)
+			return (DisplayMode)i;
+	}
+	// Also accept the numeric value.
+	const Int value = atoi(it->second.str());
+	if (value > 0 && value < DisplayMode_Count)
+		return (DisplayMode)value;
+	return DisplayMode_Fullscreen;
+}
+
+void OptionPreferences::setDisplayMode(DisplayMode mode)
+{
+	(*this)["DisplayMode"] = getDisplayModeName(mode);
+}
+
 void OptionPreferences::getResolution(Int *xres, Int *yres)
 {
 	*xres = TheGlobalData->m_xResolution;

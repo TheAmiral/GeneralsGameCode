@@ -117,7 +117,8 @@ Bool LookAtTranslator::canScrollAtScreenEdge() const
 	if (!TheMouse->isCursorCaptured())
 		return false;
 
-	if (TheDisplay->getWindowed())
+	// Armies Of Tomorrow: a borderless window covers the monitor, so it scrolls at the edge like full screen.
+	if (TheDisplay->getWindowed() && !TheDisplay->getBorderless())
 	{
 		if ((m_screenEdgeScrollMode & ScreenEdgeScrollMode_EnabledInWindowedApp) == 0)
 			return false;

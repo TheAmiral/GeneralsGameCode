@@ -22,6 +22,7 @@
 #include "Utility/lazy_static.h"
 #include "Utility/STLUtils.h"
 #include "Utility/stringex.h"
+#include "Utility/cpucontext_compat.h"
 #include <new>
 #include <set>
 
@@ -31,14 +32,14 @@ namespace
 
 typedef BOOL (WINAPI *SymInitialize_t)(HANDLE hProcess, PCSTR UserSearchPath, BOOL fInvadeProcess);
 typedef BOOL (WINAPI *SymCleanup_t)(HANDLE hProcess);
-typedef DWORD (WINAPI *SymLoadModule_t)(HANDLE hProcess, HANDLE hFile, PCSTR ImageName,
-	PCSTR ModuleName, DWORD BaseOfDll, DWORD SizeOfDll);
-typedef DWORD (WINAPI *SymGetModuleBase_t)(HANDLE hProcess, DWORD dwAddr);
-typedef BOOL (WINAPI *SymUnloadModule_t)(HANDLE hProcess, DWORD BaseOfDll);
-typedef BOOL (WINAPI *SymGetSymFromAddr_t)(HANDLE hProcess, DWORD dwAddr, PDWORD pdwDisplacement, PIMAGEHLP_SYMBOL Symbol);
-typedef BOOL (WINAPI *SymGetLineFromAddr_t)(HANDLE hProcess, DWORD dwAddr, PDWORD pdwDisplacement, PIMAGEHLP_LINE Line);
+typedef DWORD_PTR (WINAPI *SymLoadModule_t)(HANDLE hProcess, HANDLE hFile, PCSTR ImageName,
+	PCSTR ModuleName, DWORD_PTR BaseOfDll, DWORD SizeOfDll);
+typedef DWORD_PTR (WINAPI *SymGetModuleBase_t)(HANDLE hProcess, DWORD_PTR dwAddr);
+typedef BOOL (WINAPI *SymUnloadModule_t)(HANDLE hProcess, DWORD_PTR BaseOfDll);
+typedef BOOL (WINAPI *SymGetSymFromAddr_t)(HANDLE hProcess, DWORD_PTR dwAddr, PDWORD_PTR pdwDisplacement, PIMAGEHLP_SYMBOL Symbol);
+typedef BOOL (WINAPI *SymGetLineFromAddr_t)(HANDLE hProcess, DWORD_PTR dwAddr, PDWORD pdwDisplacement, PIMAGEHLP_LINE Line);
 typedef DWORD (WINAPI *SymSetOptions_t)(DWORD SymOptions);
-typedef PVOID (WINAPI *SymFunctionTableAccess_t)(HANDLE hProcess, DWORD AddrBase);
+typedef PVOID (WINAPI *SymFunctionTableAccess_t)(HANDLE hProcess, DWORD_PTR AddrBase);
 typedef BOOL (WINAPI *StackWalk_t)(DWORD MachineType, HANDLE hProcess, HANDLE hThread, LPSTACKFRAME StackFrame,
 	PVOID ContextRecord, PREAD_PROCESS_MEMORY_ROUTINE ReadMemoryRoutine,
 	PFUNCTION_TABLE_ACCESS_ROUTINE FunctionTableAccessRoutine, PGET_MODULE_BASE_ROUTINE GetModuleBaseRoutine,
@@ -95,20 +96,26 @@ public:
 #define DBGHELP_RESOLVE(name) \
 	name##Ptr = reinterpret_cast<name##_t>(::GetProcAddress(Module, #name))
 
+// AoT @feature 64-bit: functions whose 64-bit export carries a "64" suffix. Their
+// addresses are DWORD_PTR above, which is DWORD on 32-bit and DWORD64 on 64-bit.
+#define DBGHELP_RESOLVE_ADDR(name) \
+	name##Ptr = reinterpret_cast<name##_t>(::GetProcAddress(Module, CPUCONTEXT_DBGHELP_NAME(#name)))
+
 static void resolveAll()
 {
 	DBGHELP_RESOLVE(SymInitialize);
 	DBGHELP_RESOLVE(SymCleanup);
-	DBGHELP_RESOLVE(SymLoadModule);
-	DBGHELP_RESOLVE(SymGetModuleBase);
-	DBGHELP_RESOLVE(SymUnloadModule);
-	DBGHELP_RESOLVE(SymGetSymFromAddr);
-	DBGHELP_RESOLVE(SymGetLineFromAddr);
+	DBGHELP_RESOLVE_ADDR(SymLoadModule);
+	DBGHELP_RESOLVE_ADDR(SymGetModuleBase);
+	DBGHELP_RESOLVE_ADDR(SymUnloadModule);
+	DBGHELP_RESOLVE_ADDR(SymGetSymFromAddr);
+	DBGHELP_RESOLVE_ADDR(SymGetLineFromAddr);
 	DBGHELP_RESOLVE(SymSetOptions);
-	DBGHELP_RESOLVE(SymFunctionTableAccess);
-	DBGHELP_RESOLVE(StackWalk);
+	DBGHELP_RESOLVE_ADDR(SymFunctionTableAccess);
+	DBGHELP_RESOLVE_ADDR(StackWalk);
 	DBGHELP_RESOLVE(MiniDumpWriteDump);
 }
+#undef DBGHELP_RESOLVE_ADDR
 #undef DBGHELP_RESOLVE
 
 static void freeResources()
@@ -297,12 +304,12 @@ BOOL WINAPI SymCleanup(
 	return FALSE;
 }
 
-DWORD WINAPI SymLoadModule(
+DWORD_PTR WINAPI SymLoadModule(
 	HANDLE hProcess,
 	HANDLE hFile,
 	PCSTR ImageName,
 	PCSTR ModuleName,
-	DWORD BaseOfDll,
+	DWORD_PTR BaseOfDll,
 	DWORD SizeOfDll)
 {
 	ScopedLock lock;
@@ -313,9 +320,9 @@ DWORD WINAPI SymLoadModule(
 	return 0;
 }
 
-DWORD WINAPI SymGetModuleBase(
+DWORD_PTR WINAPI SymGetModuleBase(
 	HANDLE hProcess,
-	DWORD dwAddr)
+	DWORD_PTR dwAddr)
 {
 	ScopedLock lock;
 
@@ -327,7 +334,7 @@ DWORD WINAPI SymGetModuleBase(
 
 BOOL WINAPI SymUnloadModule(
 	HANDLE hProcess,
-	DWORD BaseOfDll)
+	DWORD_PTR BaseOfDll)
 {
 	ScopedLock lock;
 
@@ -339,8 +346,8 @@ BOOL WINAPI SymUnloadModule(
 
 BOOL WINAPI SymGetSymFromAddr(
 	HANDLE hProcess,
-	DWORD dwAddr,
-	PDWORD pdwDisplacement,
+	DWORD_PTR dwAddr,
+	PDWORD_PTR pdwDisplacement,
 	PIMAGEHLP_SYMBOL Symbol)
 {
 	ScopedLock lock;
@@ -353,7 +360,7 @@ BOOL WINAPI SymGetSymFromAddr(
 
 BOOL WINAPI SymGetLineFromAddr(
 	HANDLE hProcess,
-	DWORD dwAddr,
+	DWORD_PTR dwAddr,
 	PDWORD pdwDisplacement,
 	PIMAGEHLP_LINE Line)
 {
@@ -378,7 +385,7 @@ DWORD WINAPI SymSetOptions(
 
 PVOID WINAPI SymFunctionTableAccess(
 	HANDLE hProcess,
-	DWORD AddrBase)
+	DWORD_PTR AddrBase)
 {
 	ScopedLock lock;
 

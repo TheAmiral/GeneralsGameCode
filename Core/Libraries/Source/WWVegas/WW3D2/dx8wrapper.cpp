@@ -118,6 +118,8 @@ int								DX8Wrapper::ResolutionHeight							= DEFAULT_RESOLUTION_HEIGHT;
 int								DX8Wrapper::BitDepth										= DEFAULT_BIT_DEPTH;
 int								DX8Wrapper::TextureBitDepth							= DEFAULT_TEXTURE_BIT_DEPTH;
 bool								DX8Wrapper::IsWindowed									= false;
+bool								DX8Wrapper::IsBorderless								= false;
+bool								DX8Wrapper::ManageWindowStyle						= false;
 D3DFORMAT					DX8Wrapper::DisplayFormat	= D3DFMT_UNKNOWN;
 D3DMULTISAMPLE_TYPE DX8Wrapper::MultiSampleAntiAliasing	= DEFAULT_MSAA;
 
@@ -356,7 +358,13 @@ void DX8Wrapper::Shutdown()
 	}
 
 	if (D3D8Lib) {
+#ifndef _WIN64
 		FreeLibrary(D3D8Lib);
+#endif
+		// Armies Of Tomorrow: 64-bit keeps D3D8.DLL loaded. Some subsystems shut down after the
+		// display and still hold textures (W3DParticleSystemManager). Their Release() would call
+		// into the unloaded DXVK d3d8/d3d9 and crash on exit. D3D objects are reference counted,
+		// so a late Release() is fine while the DLL stays loaded. The OS frees it at exit.
 		D3D8Lib = nullptr;
 	}
 
@@ -874,12 +882,36 @@ void DX8Wrapper::Get_Format_Name(unsigned int format, StringClass *tex_format)
 
 void DX8Wrapper::Resize_And_Position_Window()
 {
+	bool forceReposition = false;
+
+	if (ManageWindowStyle)
+	{
+		// Armies Of Tomorrow: give the window the style of the current mode. The styles match the ones
+		// WinMain uses when it creates the window.
+		const LONG modeBits = WS_MINIMIZEBOX | WS_SYSMENU | WS_DLGFRAME | WS_CAPTION | WS_BORDER | WS_THICKFRAME;
+		LONG wantedBits = WS_SYSMENU;
+		if (IsWindowed && !IsBorderless)
+			wantedBits = WS_MINIMIZEBOX | WS_SYSMENU | WS_DLGFRAME | WS_CAPTION;
+		else if (IsWindowed && IsBorderless)
+			wantedBits = WS_MINIMIZEBOX | WS_SYSMENU;
+
+		const LONG oldStyle = ::GetWindowLong(_Hwnd, GWL_STYLE);
+		const LONG newStyle = (oldStyle & ~modeBits) | wantedBits | WS_POPUP | WS_VISIBLE;
+		if (newStyle != oldStyle)
+		{
+			::SetWindowLong(_Hwnd, GWL_STYLE, newStyle);
+			::SetWindowPos(_Hwnd, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+		}
+		forceReposition = true;
+	}
+
 	// Get the current dimensions of the 'render area' of the window
 	RECT rect = { 0 };
 	::GetClientRect (_Hwnd, &rect);
 
 	// Is the window the correct size for this resolution?
-	if ((rect.right-rect.left) != ResolutionWidth ||
+	if (forceReposition ||
+			(rect.right-rect.left) != ResolutionWidth ||
 			(rect.bottom-rect.top) != ResolutionHeight) {
 
 		// Calculate what the main window's bounding rectangle should be to
@@ -900,6 +932,17 @@ void DX8Wrapper::Resize_And_Position_Window()
 
 			DEBUG_LOG(("Window resized to w:%d h:%d", width, height));
 		}
+		else if (IsBorderless)
+		{
+			// Armies Of Tomorrow: a borderless window sits on the top left corner of its monitor.
+			// The caller picks the monitor size as the resolution, so the window covers the monitor.
+			// It is not topmost, so Alt+Tab and other windows work as on the desktop.
+			MONITORINFO mi = {sizeof(MONITORINFO)};
+			GetMonitorInfo(MonitorFromWindow(_Hwnd, MONITOR_DEFAULTTOPRIMARY), &mi);
+			::SetWindowPos(_Hwnd, HWND_NOTOPMOST, mi.rcMonitor.left, mi.rcMonitor.top, width, height, 0);
+
+			DEBUG_LOG(("Borderless window positioned to x:%d y:%d, resized to w:%d h:%d", mi.rcMonitor.left, mi.rcMonitor.top, width, height));
+		}
 		else
 		{
 			// TheSuperHackers @feature helmutbuhler 14/04/2025
@@ -919,7 +962,9 @@ void DX8Wrapper::Resize_And_Position_Window()
 			rectClient.bottom = rectClient.top + ResolutionHeight;
 			MoveRectIntoOtherRect(rectClient, mi.rcMonitor, &left, &top);
 
-			::SetWindowPos (_Hwnd, nullptr, left, top, width, height, SWP_NOZORDER);
+			// Armies Of Tomorrow: when the wrapper manages the style, the window may come from full screen,
+			// where it was topmost, so drop the topmost flag.
+			::SetWindowPos (_Hwnd, ManageWindowStyle ? HWND_NOTOPMOST : nullptr, left, top, width, height, ManageWindowStyle ? 0 : SWP_NOZORDER);
 
 			DEBUG_LOG(("Window positioned to x:%d y:%d, resized to w:%d h:%d", left, top, width, height));
 		}
@@ -1254,16 +1299,83 @@ bool DX8Wrapper::Set_Device_Resolution(int width,int height,int bits,int windowe
 		if (height != -1) {
 			_PresentParameters.BackBufferHeight = ResolutionHeight = height;
 		}
+		// Armies Of Tomorrow: switch between full screen and windowed. This must happen before the
+		// window is resized, because the window style depends on the windowed state.
+		if (windowed != -1 && (windowed != 0) != IsWindowed)
+		{
+			if (!Apply_Windowed_State(windowed != 0))
+				return false;
+		}
 		if (resize_window)
 		{
 			Resize_And_Position_Window();
 		}
-#pragma message("TODO: support changing windowed status and changing the bit depth")
+#pragma message("TODO: support changing the bit depth")
 		WWDEBUG_SAY(("DX8Wrapper::Set_Device_Resolution is resetting the device."));
 		return Reset_Device();
 	} else {
 		return false;
 	}
+}
+
+// Armies Of Tomorrow: update the present parameters for a new windowed state before Reset_Device().
+// It picks the formats the same way Set_Render_Device() does.
+bool DX8Wrapper::Apply_Windowed_State(bool windowed)
+{
+	IsWindowed = windowed;
+	DX8Wrapper_IsWindowed = IsWindowed;
+
+	_PresentParameters.Windowed = IsWindowed;
+	_PresentParameters.BackBufferCount = IsWindowed ? 1 : 2;
+	_PresentParameters.FullScreen_RefreshRateInHz = D3DPRESENT_RATE_DEFAULT;
+	if (IsWindowed)
+		_PresentParameters.FullScreen_PresentationInterval = D3DPRESENT_INTERVAL_DEFAULT; // D3D8 requires this in windowed mode
+
+	if (IsWindowed)
+	{
+		D3DDISPLAYMODE desktop_mode;
+		::ZeroMemory(&desktop_mode, sizeof(D3DDISPLAYMODE));
+		D3DInterface->GetAdapterDisplayMode(CurRenderDevice, &desktop_mode);
+
+		DisplayFormat = _PresentParameters.BackBufferFormat = desktop_mode.Format;
+		switch (desktop_mode.Format) {
+		case D3DFMT_X8R8G8B8:
+		case D3DFMT_A8R8G8B8:
+		case D3DFMT_R8G8B8: BitDepth=32; break;
+		case D3DFMT_A4R4G4B4:
+		case D3DFMT_A1R5G5B5:
+		case D3DFMT_R5G6B5: BitDepth=16; break;
+		default: break;
+		}
+
+		if (BitDepth==32 && D3DInterface->CheckDeviceType(0,D3DDEVTYPE_HAL,desktop_mode.Format,D3DFMT_A8R8G8B8, TRUE) == D3D_OK)
+			_PresentParameters.BackBufferFormat = D3DFMT_A8R8G8B8;
+
+		if (!Find_Z_Mode(DisplayFormat,_PresentParameters.BackBufferFormat,&_PresentParameters.AutoDepthStencilFormat))
+			_PresentParameters.AutoDepthStencilFormat = (BitDepth==32) ? D3DFMT_D32 : D3DFMT_D16;
+	}
+	else
+	{
+		if (!Find_Color_And_Z_Mode(ResolutionWidth,ResolutionHeight,BitDepth,&DisplayFormat,
+			&_PresentParameters.BackBufferFormat,&_PresentParameters.AutoDepthStencilFormat))
+			return false;
+	}
+
+	if (_PresentParameters.MultiSampleType > D3DMULTISAMPLE_NONE)
+	{
+		const HRESULT hrBack = D3DInterface->CheckDeviceMultiSampleType(CurRenderDevice, D3DDEVTYPE_HAL,
+			_PresentParameters.BackBufferFormat, IsWindowed, _PresentParameters.MultiSampleType);
+		const HRESULT hrDepth = D3DInterface->CheckDeviceMultiSampleType(CurRenderDevice, D3DDEVTYPE_HAL,
+			_PresentParameters.AutoDepthStencilFormat, IsWindowed, _PresentParameters.MultiSampleType);
+		if (FAILED(hrBack) || FAILED(hrDepth))
+		{
+			WWDEBUG_SAY(("Requested MSAA Mode Not Supported in the new window mode"));
+			MultiSampleAntiAliasing = _PresentParameters.MultiSampleType = D3DMULTISAMPLE_NONE;
+		}
+	}
+
+	WWDEBUG_SAY(("DX8Wrapper::Apply_Windowed_State windowed: %d", IsWindowed ? 1 : 0));
+	return true;
 }
 
 void DX8Wrapper::Get_Device_Resolution(int & set_w,int & set_h,int & set_bits,bool & set_windowed)

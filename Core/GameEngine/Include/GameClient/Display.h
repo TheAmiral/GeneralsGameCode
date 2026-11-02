@@ -90,6 +90,11 @@ public:
 	virtual UnsignedInt getBitDepth() { return m_bitDepth; }
 	virtual void setWindowed( Bool windowed ) { m_windowed = windowed; }  ///< set windowed/fullscreen flag
 	virtual Bool getWindowed() { return m_windowed; }				///< return widowed/fullscreen flag
+	// Armies Of Tomorrow: borderless window mode. It is a windowed mode, so getWindowed() is TRUE too.
+	// Call setBorderless() before setDisplayMode(), which then applies the window style.
+	virtual void setBorderless( Bool borderless ) { m_borderless = borderless; }
+	virtual Bool getBorderless() { return m_borderless; }
+	virtual void getMonitorResolution( Int *xres, Int *yres ) { *xres = (Int)getWidth(); *yres = (Int)getHeight(); }	///< size of the monitor the game window is on
 	virtual Bool setDisplayMode( UnsignedInt xres, UnsignedInt yres, UnsignedInt bitdepth, Bool windowed );	///<sets screen resolution/mode
 	virtual Int getDisplayModeCount() {return 0;}	///<return number of display modes/resolutions supported by video card.
 	virtual void getDisplayModeDescription(Int modeIndex, Int *xres, Int *yres, Int *bitDepth) {}	///<return description of mode
@@ -206,6 +211,7 @@ protected:
 	UnsignedInt m_width, m_height;			///< Dimensions of the display
 	UnsignedInt m_bitDepth;							///< bit depth of the display
 	Bool m_windowed;										///< TRUE when windowed, FALSE when fullscreen
+	Bool m_borderless;									///< TRUE when the window has no frame and covers the monitor
 	Bool m_isBatching;
 	View *m_viewList;										///< All of the views into the world
 
@@ -241,4 +247,5 @@ typedef struct _DisplaySettings
 	Int yRes;  //Resolution height
 	Int bitDepth; //Color Depth
 	Bool windowed; //Window mode TRUE: we're windowed, FALSE: we're not windowed
+	Bool borderless; //Armies Of Tomorrow: TRUE when the window has no frame and covers the monitor
 } DisplaySettings;

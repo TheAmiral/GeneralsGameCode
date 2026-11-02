@@ -107,7 +107,7 @@ private:
 	static void Save_Registry_Values(HKEY key, char *path, INIClass *ini);
 
 
-	int	Key;
+	uintptr_t	Key; // AoT @feature 64-bit: holds an HKEY, so it must be pointer sized
 	bool	IsValid;
 
 	//

@@ -36,6 +36,9 @@
 #include <Utility/stdio_adapter.h>
 #include <Utility/stringex.h>
 #include <new>      // needed for placement new prototype
+#if defined(_WIN64) && defined(_MSC_VER)
+#include <intrin.h> // _ReturnAddress
+#endif
 
 // a little dummy variable that makes the linker actually include
 // us...
@@ -74,7 +77,7 @@ Debug::LogDescription::LogDescription(const char *fileOrGroup, const char *descr
 Debug Debug::Instance;
 
 // more class static members
-unsigned Debug::curStackFrame;
+uintptr_t Debug::curStackFrame;
 
 // this constructor is empty on purpose because all construction
 // work is done in PreStaticInit (and some in PostStaticInit)
@@ -306,8 +309,13 @@ bool Debug::SkipNext()
 
   // do not implement this function inline, we do need
   // a valid frame pointer here!
-  unsigned help;
-#if defined(_MSC_VER)
+  uintptr_t help;
+#if defined(_WIN64) && defined(_MSC_VER)
+  // AoT @feature 64-bit: no inline assembly on x64, the intrinsic gives the same return address.
+  help=(uintptr_t)_ReturnAddress();
+#elif defined(_WIN64) && (defined(__GNUC__) || defined(__clang__))
+  help=(uintptr_t)__builtin_return_address(0);
+#elif defined(_MSC_VER)
   __asm
   {
     mov eax,[ebp+4]   // return address
@@ -435,7 +443,9 @@ bool Debug::AssertDone()
           }
           break;
         case IDRETRY:
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) && defined(_WIN64)
+          __debugbreak(); // AoT @feature 64-bit: no inline assembly on x64
+#elif defined(_MSC_VER)
           __asm
           {
             int 0x03
@@ -712,7 +722,9 @@ bool Debug::CrashDone(bool die)
             }
             break;
           case IDRETRY:
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) && defined(_WIN64)
+            __debugbreak(); // AoT @feature 64-bit: no inline assembly on x64
+#elif defined(_MSC_VER)
             __asm
             {
               int 0x03
@@ -906,8 +918,8 @@ Debug& Debug::operator<<(const void *ptr)
   (*this) << "ptr:";
   if (ptr)
   {
-    char help[9];
-    (*this) << "0x" << _ultoa((unsigned long)ptr,help,16);
+    char help[17];
+    (*this) << "0x" << _ui64toa((unsigned __int64)(uintptr_t)ptr,help,16);
   }
   else
     (*this) << "null";
@@ -938,8 +950,8 @@ Debug& Debug::operator<<(const MemDump &dump)
   for (unsigned i=0;i<dump.m_numItems;i+=itemPerLine,cur+=itemPerLine*dump.m_bytePerItem)
   {
     // address
-    char buf[9];
-    sprintf(buf,"%08x",dump.m_absAddr?unsigned(cur):cur-dump.m_startPtr);
+    char buf[17];
+    sprintf(buf,"%08x",dump.m_absAddr?unsigned((uintptr_t)cur):unsigned(cur-dump.m_startPtr));
     operator<<(buf);
 
     // items
@@ -1017,9 +1029,9 @@ bool Debug::IsLogEnabled(const char *fileOrGroup)
   // to be used from the D_ISLOG macros only and those guarantee
   // that we are having real static strings let's use
   // that strings address as frame address...
-  FrameHashEntry *e=Instance.LookupFrame((unsigned)fileOrGroup);
+  FrameHashEntry *e=Instance.LookupFrame((uintptr_t)fileOrGroup);
   if (!e)
-    e=Instance.AddFrameEntry((unsigned)fileOrGroup,FrameTypeLog,fileOrGroup,0);
+    e=Instance.AddFrameEntry((uintptr_t)fileOrGroup,FrameTypeLog,fileOrGroup,0);
   if (e->status==Unknown)
     Instance.UpdateFrameStatus(*e);
   return e->status==NoSkip;
@@ -1202,7 +1214,7 @@ void Debug::Update()
   }
 }
 
-Debug::FrameHashEntry* Debug::AddFrameEntry(unsigned addr, unsigned type,
+Debug::FrameHashEntry* Debug::AddFrameEntry(uintptr_t addr, unsigned type,
                                             const char *fileOrGroup, int line)
 {
   __ASSERT(LookupFrame(addr)==nullptr);

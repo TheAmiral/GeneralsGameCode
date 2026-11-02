@@ -102,6 +102,8 @@ public:
 	virtual void setWidth( UnsignedInt width ) override;
 	virtual void setHeight( UnsignedInt height ) override;
 	virtual Bool setDisplayMode( UnsignedInt xres, UnsignedInt yres, UnsignedInt bitdepth, Bool windowed ) override;
+	virtual void setBorderless( Bool borderless ) override;
+	virtual void getMonitorResolution( Int *xres, Int *yres ) override;
 	virtual Int getDisplayModeCount() override;	///<return number of display modes/resolutions supported by video card.
 	virtual void getDisplayModeDescription(Int modeIndex, Int *xres, Int *yres, Int *bitDepth) override;	///<return description of mode
  	virtual void setGamma(Real gamma, Real bright, Real contrast, Bool calibrate) override;
@@ -190,6 +192,8 @@ public:
 	virtual Int getLastFrameDrawCalls() override;				///< returns the number of draw calls issued in the previous frame
 
 protected:
+
+	Bool m_activeBorderless;	///< Armies Of Tomorrow: borderless state of the current device, for reverting a failed mode change
 
 	void initAssets();									///< init assets for WW3D
 	void init3DScene();									///< init 3D scene for WW3D

@@ -94,6 +94,11 @@ static GameWindow *   comboBoxAntiAliasing     = nullptr;
 static NameKeyType    comboBoxResolutionID      = NAMEKEY_INVALID;
 static GameWindow *   comboBoxResolution       = nullptr;
 
+// Armies Of Tomorrow: window mode choice. The control lives in our OptionsMenu.wnd; with the
+// retail layout it does not exist and the mode comes from Options.ini only.
+static NameKeyType    comboBoxDisplayModeID   = NAMEKEY_INVALID;
+static GameWindow *   comboBoxDisplayMode     = nullptr;
+
 static NameKeyType    comboBoxDetailID      = NAMEKEY_INVALID;
 static GameWindow *   comboBoxDetail        = nullptr;
 
@@ -849,36 +854,83 @@ static void saveOptions()
 	oldDispSettings.yRes = TheDisplay->getHeight();
 	oldDispSettings.bitDepth = TheDisplay->getBitDepth();
 	oldDispSettings.windowed = TheDisplay->getWindowed();
+	oldDispSettings.borderless = TheDisplay->getBorderless();
 
+	// Armies Of Tomorrow: the window mode. It is changed together with the resolution, because a
+	// borderless window always uses the monitor resolution.
+	Bool newWindowed = oldDispSettings.windowed;
+	Bool newBorderless = oldDispSettings.borderless;
+	Bool modeChosen = FALSE;
+	if (comboBoxDisplayMode && comboBoxDisplayMode->winGetEnabled())
+	{
+		Int modePos = -1;
+		GadgetComboBoxGetSelectedPos(comboBoxDisplayMode, &modePos);
+		if (modePos >= 0 && modePos < OptionPreferences::DisplayMode_Count)
+		{
+			newWindowed = (modePos != OptionPreferences::DisplayMode_Fullscreen);
+			newBorderless = (modePos == OptionPreferences::DisplayMode_Borderless);
+			modeChosen = TRUE;
+		}
+	}
+
+	Bool haveResolution = FALSE;
+	bitDepth = TheDisplay->getBitDepth();
 	if (comboBoxResolution && comboBoxResolution->winGetEnabled() && index < TheDisplay->getDisplayModeCount() && index >= 0)
 	{
 		TheDisplay->getDisplayModeDescription(index,&xres,&yres,&bitDepth);
-		if (TheGlobalData->m_xResolution != xres || TheGlobalData->m_yResolution != yres)
+		haveResolution = TRUE;
+	}
+	if (modeChosen && newBorderless)
+	{
+		TheDisplay->getMonitorResolution(&xres, &yres);
+		haveResolution = TRUE;
+	}
+	else if (modeChosen && !haveResolution)
+	{
+		xres = oldDispSettings.xRes;
+		yres = oldDispSettings.yRes;
+		haveResolution = TRUE;
+	}
+
+	const Bool modeChanged = (newWindowed != oldDispSettings.windowed) || (newBorderless != oldDispSettings.borderless);
+	if (haveResolution && (modeChanged || TheGlobalData->m_xResolution != xres || TheGlobalData->m_yResolution != yres))
+	{
+		TheDisplay->setBorderless(newBorderless);
+		if (TheDisplay->setDisplayMode(xres,yres,bitDepth,newWindowed))
 		{
-			if (TheDisplay->setDisplayMode(xres,yres,bitDepth,TheDisplay->getWindowed()))
+			dispChanged = TRUE;
+			TheWritableGlobalData->m_xResolution = xres;
+			TheWritableGlobalData->m_yResolution = yres;
+			TheWritableGlobalData->m_windowed = newWindowed;
+			TheWritableGlobalData->m_borderless = newBorderless;
+
+			TheHeaderTemplateManager->onResolutionChanged();
+			TheMouse->onResolutionChanged();
+
+			//Save new settings for a dialog box confirmation after options are accepted
+			newDispSettings.xRes = xres;
+			newDispSettings.yRes = yres;
+			newDispSettings.bitDepth = bitDepth;
+			newDispSettings.windowed = newWindowed;
+			newDispSettings.borderless = newBorderless;
+
+			AsciiString prefString;
+			prefString.format("%d %d", xres, yres );
+			(*pref)["Resolution"] = prefString;
+			if (modeChosen)
 			{
-				dispChanged = TRUE;
-				TheWritableGlobalData->m_xResolution = xres;
-				TheWritableGlobalData->m_yResolution = yres;
-
-				TheHeaderTemplateManager->onResolutionChanged();
-				TheMouse->onResolutionChanged();
-
-				//Save new settings for a dialog box confirmation after options are accepted
-				newDispSettings.xRes = xres;
-				newDispSettings.yRes = yres;
-				newDispSettings.bitDepth = bitDepth;
-				newDispSettings.windowed = TheDisplay->getWindowed();
-
-				AsciiString prefString;
-				prefString.format("%d %d", xres, yres );
-				(*pref)["Resolution"] = prefString;
-
-				TheShell->recreateWindowLayouts();
-
-				TheInGameUI->recreateControlBar();
-				TheInGameUI->refreshCustomUiResources();
+				pref->setDisplayMode(!newWindowed ? OptionPreferences::DisplayMode_Fullscreen
+					: (newBorderless ? OptionPreferences::DisplayMode_Borderless : OptionPreferences::DisplayMode_Windowed));
 			}
+
+			TheShell->recreateWindowLayouts();
+
+			TheInGameUI->recreateControlBar();
+			TheInGameUI->refreshCustomUiResources();
+		}
+		else
+		{
+			TheDisplay->setBorderless(oldDispSettings.borderless);
 		}
 	}
 
@@ -963,6 +1015,16 @@ void OptionsMenuInit( WindowLayout *layout, void *userData )
 	comboBoxAntiAliasing   = TheWindowManager->winGetWindowFromId( nullptr, comboBoxAntiAliasingID );
 	comboBoxResolutionID   = TheNameKeyGenerator->nameToKey( "OptionsMenu.wnd:ComboBoxResolution" );
 	comboBoxResolution     = TheWindowManager->winGetWindowFromId( nullptr, comboBoxResolutionID );
+	comboBoxDisplayModeID  = TheNameKeyGenerator->nameToKey( "OptionsMenu.wnd:ComboBoxDisplayMode" );
+	comboBoxDisplayMode    = TheWindowManager->winGetWindowFromId( nullptr, comboBoxDisplayModeID );
+	{
+		// Armies Of Tomorrow: the label has no entry in the retail string table, so the WND loader
+		// shows MISSING. Set its text here.
+		GameWindow *displayModeLabel = TheWindowManager->winGetWindowFromId( nullptr,
+			TheNameKeyGenerator->nameToKey( "OptionsMenu.wnd:DisplayModeLabel" ) );
+		if (displayModeLabel)
+			GadgetStaticTextSetText( displayModeLabel, TheGameText->fetchOrSubstitute( "GUI:AoTDisplayModeLabel", L"Window" ) );
+	}
 	comboBoxDetailID			 = TheNameKeyGenerator->nameToKey( "OptionsMenu.wnd:ComboBoxDetail" );
 	comboBoxDetail		   = TheWindowManager->winGetWindowFromId( nullptr, comboBoxDetailID );
 
@@ -1240,6 +1302,21 @@ void OptionsMenuInit( WindowLayout *layout, void *userData )
 
 	GadgetComboBoxSetSelectedPos( comboBoxResolution, selectedResIndex );
 
+	// Armies Of Tomorrow: populate the window modes, in OptionPreferences::DisplayMode order.
+	if (comboBoxDisplayMode)
+	{
+		GadgetComboBoxReset(comboBoxDisplayMode);
+		GadgetComboBoxAddEntry(comboBoxDisplayMode, TheGameText->fetchOrSubstitute("GUI:AoTDisplayModeFullscreen", L"Full Screen"), color);
+		GadgetComboBoxAddEntry(comboBoxDisplayMode, TheGameText->fetchOrSubstitute("GUI:AoTDisplayModeWindowed", L"Windowed"), color);
+		GadgetComboBoxAddEntry(comboBoxDisplayMode, TheGameText->fetchOrSubstitute("GUI:AoTDisplayModeBorderless", L"Borderless"), color);
+		static_assert(OptionPreferences::DisplayMode_Count == 3, "Wrong combo box count");
+
+		Int modePos = OptionPreferences::DisplayMode_Fullscreen;
+		if (TheDisplay->getWindowed())
+			modePos = TheDisplay->getBorderless() ? OptionPreferences::DisplayMode_Borderless : OptionPreferences::DisplayMode_Windowed;
+		GadgetComboBoxSetSelectedPos(comboBoxDisplayMode, modePos);
+	}
+
 	// set the display detail
 	// TheSuperHackers @tweak xezon 24/09/2025 The Detail Combo Box now has the same value order as StaticGameLODLevel for simplicity.
 	// TheSuperHackers @feature xezon 24/09/2025 The Detail Combo Box now has a new options for "Very High".
@@ -1411,6 +1488,9 @@ void OptionsMenuInit( WindowLayout *layout, void *userData )
 
 		if (comboBoxResolution)
 			comboBoxResolution->winEnable(FALSE);
+
+		if (comboBoxDisplayMode)
+			comboBoxDisplayMode->winEnable(FALSE);
 
 		if (textEntryFirewallPortOverride)
 			textEntryFirewallPortOverride->winEnable(FALSE);
